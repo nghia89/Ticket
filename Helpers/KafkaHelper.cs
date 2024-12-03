@@ -1,3 +1,6 @@
+using Ticket.Models;
+using Ticket.Modules.LogKafka;
+
 namespace Ticket.Helpers;
 
 using System;
@@ -8,9 +11,10 @@ using Confluent.Kafka;
 public class KafkaHelper : IKafkaHelper
 {
     private readonly IProducer<Null, string> _producer;
-
-    public KafkaHelper(ProducerConfig producerConfig)
+    private readonly IServiceProvider  _serviceProvider;
+    public KafkaHelper(ProducerConfig producerConfig, IServiceProvider  serviceProvider)
     {
+        _serviceProvider = serviceProvider;
         _producer = new ProducerBuilder<Null, string>(producerConfig).Build();
     }
 
@@ -46,15 +50,12 @@ public class KafkaHelper : IKafkaHelper
             {
                 try
                 {
-                    // Consume message
                     var result = consumer.Consume(stoppingToken);
 
                     if (result != null)
                     {
-                        // Handle message
                         await handleMessage(result.Message.Value);
-
-                        // Commit offset sau khi xử lý thành công
+                        
                         consumer.Commit(result);
                     }
                 }
@@ -71,7 +72,83 @@ public class KafkaHelper : IKafkaHelper
         }
         finally
         {
-            consumer.Close(); // Đảm bảo consumer được đóng
+            consumer.Close(); 
+        }
+    }
+
+    public async Task ConsumeWithRetryAsync(string topic, string groupId, Func<string, Task> messageHandler, CancellationToken stoppingToken,
+        int maxRetryAttempts = 3, int retryDelayMs = 1000)
+    {
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = "localhost:9092",
+            GroupId = groupId,
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            AllowAutoCreateTopics = true
+        };
+       using var consumer= new ConsumerBuilder<string,string>(config).Build();
+       consumer.Subscribe(topic);
+       try
+       {
+           while (!stoppingToken.IsCancellationRequested)
+           {
+               try
+               {
+                   var result = consumer.Consume(stoppingToken);
+                   if(result!=null)
+                   {
+                       await ExecuteWithRetryAsync(async () => await messageHandler(result.Message.Value), maxRetryAttempts, retryDelayMs,
+                           topic, result.Message.Value);
+                       consumer.Commit(result);
+                   }
+               }
+               catch(ConsumeException  ex)
+               {
+                   Console.WriteLine($"Kafka consuming error: {ex.Message}"); 
+               }
+           }
+       }
+       finally
+       {
+           consumer.Close();
+       }
+    }
+    
+    private async Task ExecuteWithRetryAsync(Func<Task> action, int maxRetryAttempts, int retryDelayMs,
+        string topic, string message)
+    {
+        var retryCount = 0;
+        while (retryCount < maxRetryAttempts)
+        {
+            try
+            {
+                await action();
+                return; 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling message: {ex.Message}");
+                retryCount++;
+                if (retryCount >= maxRetryAttempts)
+                {
+                    var logModel=new KafkaErrorLogModel
+                    {
+                        Message = message,
+                        Topic = topic,
+                        Error = ex.Message
+                    };
+                    using (var scope = _serviceProvider.CreateScope())
+                    {
+                        var logService = scope.ServiceProvider.GetRequiredService<ILogKafkaService>();
+                        await logService.LogErrorAsync(logModel);
+                    }
+                  
+                    Console.WriteLine("Max retry attempts reached. Logging error...");
+                    break;
+                }
+
+                await Task.Delay(retryDelayMs);
+            }
         }
     }
 }

@@ -6,6 +6,7 @@ using StackExchange.Redis;
 using Ticket.BackgroundService;
 using Ticket.Controllers;
 using Ticket.Helpers;
+using Ticket.Modules.LogKafka;
 using Ticket.Modules.SeatChecking;
 using Ticket.Modules.TicketBooking;
 using Ticket.Shared.Models;
@@ -39,6 +40,15 @@ builder.Services.AddScoped(sp =>
 
 #endregion
 
+#region Add services
+
+builder.Services.AddScoped<ISeatCheckingService, SeatCheckingService>();
+builder.Services.AddScoped<ITicketBookingService, TicketBookingService>();
+builder.Services.AddScoped<ILogKafkaService, LogKafkaService>();
+
+#endregion
+
+
 #region Kafka
 var kafkaProducerConfig = new ProducerConfig
 {
@@ -65,12 +75,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 builder.Services.AddScoped<IRedisCacheHelper, RedisCacheHelper>();
 #endregion
 
-#region Add services
 
-builder.Services.AddScoped<ISeatCheckingService, SeatCheckingService>();
-builder.Services.AddScoped<ITicketBookingService, TicketBookingService>();
-#endregion
- 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

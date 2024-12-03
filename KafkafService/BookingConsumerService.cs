@@ -25,5 +25,12 @@ public class BookingConsumerService : IKafkaConsumerService
             var scopedService = scope.ServiceProvider.GetRequiredService<ITicketBookingConsumerService>();
             await scopedService.HandleMessageAsync(message);
         }, stoppingToken);
+        
+        // await _kafkaHelper.ConsumeWithRetryAsync(topic, groupId, async (message) =>
+        // {
+        //     using var scope = _serviceScopeFactory.CreateScope();
+        //     var scopedService = scope.ServiceProvider.GetRequiredService<ITicketBookingConsumerService>();
+        //     await scopedService.HandleMessageAsync(message);
+        // }, stoppingToken);
     }
 }
