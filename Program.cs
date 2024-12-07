@@ -53,6 +53,8 @@ builder.Services.AddScoped<ILogKafkaService, LogKafkaService>();
 var kafkaProducerConfig = new ProducerConfig
 {
     BootstrapServers = "localhost:9092",  
+    RetryBackoffMs = 100,
+    MessageSendMaxRetries  = 3
 };
 
 builder.Services.AddSingleton(kafkaProducerConfig);

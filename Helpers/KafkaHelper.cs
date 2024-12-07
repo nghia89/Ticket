@@ -29,7 +29,17 @@ public class KafkaHelper : IKafkaHelper
         }
         catch (ProduceException<Null, string> ex)
         {
-            Console.WriteLine($"Error producing message: {ex.Error.Reason}");
+            Console.WriteLine($"Produce error: {ex.Error.Reason} (Error code: {ex.Error.Code})");
+
+            if (ex.Error.IsFatal)
+            {
+                Console.WriteLine("Fatal error encountered. Stopping producer...");
+                throw;
+            }
+            else
+            {
+                Console.WriteLine("Transient error. Retrying...");
+            }
         }
     }
     public async Task ConsumeAsync(string topic,string groupId, Func<string, Task> handleMessage, CancellationToken stoppingToken)
@@ -38,7 +48,7 @@ public class KafkaHelper : IKafkaHelper
         {
             BootstrapServers = "localhost:9092",
             GroupId = groupId,
-            AutoOffsetReset = AutoOffsetReset.Earliest,// Đọc từ offset đầu tiên
+            AutoOffsetReset = AutoOffsetReset.Earliest,
         };
 
         using var consumer = new ConsumerBuilder<string, string>(config).Build();
@@ -137,12 +147,10 @@ public class KafkaHelper : IKafkaHelper
                         Topic = topic,
                         Error = ex.Message
                     };
-                    using (var scope = _serviceProvider.CreateScope())
-                    {
-                        var logService = scope.ServiceProvider.GetRequiredService<ILogKafkaService>();
-                        await logService.LogErrorAsync(logModel);
-                    }
-                  
+                    using var scope = _serviceProvider.CreateScope();
+                    var logService = scope.ServiceProvider.GetRequiredService<ILogKafkaService>();
+                    await logService.LogErrorAsync(logModel);
+                    
                     Console.WriteLine("Max retry attempts reached. Logging error...");
                     break;
                 }
