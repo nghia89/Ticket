@@ -1,5 +1,6 @@
 using MongoDB.Driver;
 using Ticket.Helpers;
+using Ticket.Modules.Services;
 
 namespace Ticket.Modules.TicketBooking;
 
@@ -53,5 +54,19 @@ public class TicketBookingService : ITicketBookingService
         {
             await _cacheHelper.ReleaseLockAsync(lockKey);
         }
+    }
+    
+    
+    public async Task<List<Shared.Models.Ticket>> GetTicket(string trainId, DateTime date)
+    {
+        var data= await _ticketCollection
+            .Find(x => x.TrainId == trainId && x.Date == date )
+            .ToListAsync();
+        foreach (var ticket in data)
+        {
+              ticket.PriceFinal = new DynamicPricingService().CalculatePrice(ticket.Price, 100, 100, ticket.Date, ticket.BookingTime, false);
+        }
+
+        return data;
     }
 }

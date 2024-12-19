@@ -10,4 +10,6 @@ public class Ticket
     public string SeatNumber { get; set; }
     public string UserId { get; set; }
     public DateTime BookingTime { get; set; }
+    public double Price { get; set; }
+    public double PriceFinal { get; set; }  
 }

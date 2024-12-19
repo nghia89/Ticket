@@ -21,6 +21,13 @@ public class TicketBookingController : ControllerBase
             return Ok(new { Message = "Ticket booked successfully" });
         return BadRequest(new { Message = "Failed to book ticket" });
     }
+    
+    [HttpGet("get")]
+    public async Task<IActionResult> GetTicket([FromQuery] string trainId, [FromQuery] DateTime date)
+    {
+        var tickets = await _ticketBookingService.GetTicket(trainId, date);
+        return Ok(tickets);
+    }
 }
 
 public class BookingRequest
